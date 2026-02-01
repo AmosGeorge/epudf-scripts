@@ -36,9 +36,9 @@ class EventFetcherListe {
             const dateFrom = currentDate.toISOString().slice(0, 10);
             const dateTo = endDate.toISOString().slice(0, 10);
             const fetchPage = async (page) => {
-                const url = `https://${domaine}${chemin}/page/${page}/?date-from=${dateFrom}&date-to=${dateTo}&category=${categorie}`;
+                const url = `${domaine}${chemin}/page/${page}/?date-from=${dateFrom}&date-to=${dateTo}&category=${categorie}`;
                 try {
-                    const proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+                    const proxyUrl = 'https://api.cors.lol/?url=' + encodeURIComponent(url);
                     const response = await fetch(proxyUrl, {
                         method: 'GET',
                         credentials: 'omit',
@@ -223,4 +223,5 @@ async function loadAllEvents() {
     }
 }
 // Lancer le chargement des événements
+
 loadAllEvents();
