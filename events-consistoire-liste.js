@@ -38,7 +38,7 @@ class EventFetcherListe {
             const fetchPage = async (page) => {
                 const url = `${domaine}${chemin}/page/${page}/?date-from=${dateFrom}&date-to=${dateTo}&category=${categorie}`;
                 try {
-                    const proxyUrl = 'https://api.cors.lol/?url=' + encodeURIComponent(url);
+                    const proxyUrl = 'https://corsproxy.io/?key=35b9a1a8&url=' + encodeURIComponent(url);
                     const response = await fetch(proxyUrl, {
                         method: 'GET',
                         credentials: 'omit',
