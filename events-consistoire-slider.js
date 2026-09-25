@@ -68,7 +68,7 @@ class EventFetcherSlider {
             const dateFrom = currentDate.toISOString().slice(0, 10);
             const dateTo = endDate.toISOString().slice(0, 10);
             const fetchPage = async (page) => {
-                const url = `${domaine}${chemin}/page/${page}/?date-from=${dateFrom}&date-to=${dateTo}&category=${categorie}`;
+                const url = `https://${domaine}${chemin}/page/${page}/?date-from=${dateFrom}&date-to=${dateTo}&category=${categorie}`;
                 try {
                     const proxyUrl = 'https://corsproxy.io/?key=35b9a1a8&url=' + encodeURIComponent(url);
                     const response = await fetch(proxyUrl, {
