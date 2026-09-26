@@ -260,7 +260,7 @@ class EventFetcherListe {
 
             // Fusion des éléments du cache sauf éléments de {domaine: window.location.hostname}
             if (cachedEvents) {
-                this.allEvents.push(...cachedEvents.filter(event => event.domaine !== window.location.hostname));
+                this.allEvents.push(...cachedEvents.filter(event => event.source !== window.location.hostname));
             }
 
             this.allEvents.sort((a, b) => a.datetime - b.datetime);
@@ -320,27 +320,32 @@ async function loadAllEvents() {
                 placeDiv.className = 'event-informations_place';
                 placeDiv.innerHTML = `<i class="icon far fa-map-marker-alt"></i><span>${event.place}</span>`
 
-                const newDiv = document.createElement('div');
-                newDiv.style.width = '100%';
-                newDiv.style.marginBottom = '5px';
-
-                const svgIcon = document.createElement('img');
-                svgIcon.className = 'icon';
-                svgIcon.style.width = '10.5px';
-                svgIcon.style.height = '17px';
-                svgIcon.style.display = 'inline-block';
-                svgIcon.style.verticalAlign = 'middle';
-                svgIcon.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34.12 36.65'><g><g><polygon fill='white' points='0 18.18 17.6 18.89 22.33 36.65 34.13 0 0 18.18'/></g></g></svg>";
-
-                newDiv.appendChild(svgIcon);
-
-                const parishSpan = document.createElement('span');
-                parishSpan.textContent = SITES_TO_FETCH.find(site => event.source === site.domaine)?.paroisse || '';
+                const parishName = SITES_TO_FETCH.find(site => event.source === site.domaine)?.paroisse || '';
+                if (parishName) {
+                    // Ajouter le style flex-wrap: wrap au div parent
+                    placeDiv.style.flexWrap = 'wrap';
+                    // Créer un nouveau div pour contenir l'icône et le texte
+                    const newDiv = document.createElement('div');
+                    newDiv.style.width = '100%';
+                    newDiv.style.marginBottom = '5px';
+                    // Ajouter l'icône SVG
+                    const svgIcon = document.createElement('img'); // style="width: 10.5px;height: 17px;display:inline-block;vertical-align:middle;"
+                    svgIcon.className = 'icon';
+                    svgIcon.style.width = '10.5px';
+                    svgIcon.style.height = '17px';
+                    svgIcon.style.display = 'inline-block';
+                    svgIcon.style.verticalAlign = 'middle';
+                    svgIcon.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34.12 36.65'><g><g><polygon fill='white' points='0 18.18 17.6 18.89 22.33 36.65 34.13 0 0 18.18'/></g></g></svg>";
+                    newDiv.appendChild(svgIcon);
+                    // Ajouter le nom de la paroisse
+                    const parishSpan = document.createElement('span');
+                    parishSpan.textContent = parishName;
+                    newDiv.appendChild(parishSpan);
+                    // Ajouter le nouveau div au début de placeDiv
+                    placeDiv.insertBefore(newDiv, placeDiv.firstChild);
+                }
 
                 imageDiv.appendChild(image);
-                
-                newDiv.appendChild(parishSpan);
-                placeDiv.appendChild(newDiv);
                 imageDiv.appendChild(placeDiv);
 
                 const contentDiv = document.createElement('div');
