@@ -61,6 +61,17 @@ class EventsCache {
             console.error('Erreur lors de l\'écriture du cache des événements:', error);
         }
     }
+
+    static update(events) {
+        try {
+            const raw = localStorage.getItem(EVENTS_CACHE_KEY);
+            let cache = raw ? JSON.parse(raw) : { fetchedAt: Date.now(), events: [] };
+            cache.events = events;
+            localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(cache));
+        } catch (error) {
+            console.error('Erreur lors de la mise à jour du cache des événements:', error);
+        }
+    }
 }
 
 // ===================================================================
@@ -140,27 +151,39 @@ class EventFetcherListe {
         eventNodes.forEach(node => {
             try {
                 const url = node.getAttribute('href');
+                const imageUrl = node.querySelector('.post-image > img')?.src?.trim() || '';
                 const title = node.querySelector('.post-title')?.textContent?.trim() || 'Titre non disponible';
-
+                const text = node.querySelector('.post-text')?.textContent?.trim() || '';
                 const dateElement = node.querySelector(
                     'a.post-item > div.post-content.event-content > div.event-informations > div.date > span'
                 );
                 const date = dateElement?.textContent?.trim() || '';
-
+                const isDatePeriod = node.querySelector(
+                    'a.post-item > div.post-content.event-content > div.event-informations > div.date-period'
+                ) !== null;
                 const timeElement = node.querySelector(
                     'a.post-item > div.post-content.event-content > div.event-informations > div.time > span'
                 );
-                const time = timeElement?.textContent?.trim() || '';
-
+                let time = '';
+                if (isDatePeriod) {
+                    const timeMatch = date.match(/(\d{1,2}h\d{2})/);
+                    time = timeMatch ? timeMatch[1] : '';
+                } else {
+                    time = timeElement?.textContent?.trim() || '';    
+                }
+                const place = node.querySelector('.event-informations_place > span')?.textContent?.trim() || '';
                 if (date) {
                     events.push({
                         url,
+                        imageUrl,
                         title,
+                        text,
                         date,
                         time,
-                        datetime: this.parseDateTime(date, time),
-                        source: domaine,
-                        category: 'consistoire'
+                        isDatePeriod,
+                        place,
+                        datetime: this.parseDateTime(date, time, isDatePeriod),
+                        source: domaine
                     });
                 }
             } catch (error) {
@@ -171,9 +194,15 @@ class EventFetcherListe {
         return events;
     }
 
-    parseDateTime(dateStr, timeStr) {
+    parseDateTime(dateStr, timeStr, isDatePeriod) {
         try {
-            const [day, month, year] = dateStr.split('/').map(num => parseInt(num));
+            if (isDatePeriod) {
+                dateMatch = dateStr.match(/Du (\d{2}\/\d{2}\/\d{4})/);
+            } else {
+                dateMatch = ['',dateStr];
+            }
+            
+            const [day, month, year] = dateMatch[1].split('/').map(num => parseInt(num));
 
             const timeMatch = timeStr.match(/(\d{1,2})h(\d{2})/);
             if (!timeMatch) {
@@ -194,15 +223,18 @@ class EventFetcherListe {
         this.allEvents = [];
 
         const cachedEvents = EventsCache.get();
+
         if (cachedEvents) {
             console.log(`Cache des événements utilisé (${cachedEvents.length} événements).`);
-            this.allEvents = cachedEvents;
-            return this.allEvents;
         }
 
         const promises = [];
 
         for (const { domaine, chemin, categorie } of domaineCategorieList) {
+            if (cachedEvents && domaine !== window.location.hostname) {
+                continue;
+            }
+
             console.log(`Récupération des événements de ${domaine} pour la catégorie ${categorie}...`);
 
             promises.push(
@@ -225,9 +257,18 @@ class EventFetcherListe {
                 this.allEvents.push(...eventArray);
             }
 
+            // Fusion des éléments du cache sauf éléments de {domaine: window.location.hostname}
+            if (cachedEvents) {
+                this.allEvents.push(...cachedEvents.filter(event => event.domaine !== window.location.hostname));
+            }
+
             this.allEvents.sort((a, b) => a.datetime - b.datetime);
 
-            EventsCache.set(this.allEvents);
+            if (cachedEvents) {
+                EventsCache.update(this.allEvents);
+            } else {
+                EventsCache.set(this.allEvents);
+            }
 
             console.log(`Total: ${this.allEvents.length} événements récupérés et mis en cache`);
             return this.allEvents;
@@ -263,11 +304,46 @@ async function loadAllEvents() {
             events.forEach(event => {
                 if (!event.url) return;
 
-                // Les données en cache ne contiennent plus le node HTML.
-                // Le contenu est donc reconstruit à partir des données extraites.
                 const node = document.createElement('a');
                 node.href = event.url;
                 node.className = 'post-item';
+
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'post-image';
+
+                const image = document.createElement('img');
+                image.src = event.imageUrl;
+                image.alt = event.title;
+
+                const placeDiv = document.createElement('div');
+                placeDiv.className = 'event-informations_place';
+                placeDiv.innerHTML = `<i class="icon far fa-map-marker-alt"></i><span>${event.place}</span>`
+
+                const newDiv = document.createElement('div');
+                newDiv.style.width = '100%';
+                newDiv.style.marginBottom = '5px';
+
+                const svgIcon = document.createElement('img');
+                svgIcon.className = 'icon';
+                svgIcon.style.width = '10.5px';
+                svgIcon.style.height = '17px';
+                svgIcon.style.display = 'inline-block';
+                svgIcon.style.verticalAlign = 'middle';
+                svgIcon.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34.12 36.65'><g><g><polygon fill='white' points='0 18.18 17.6 18.89 22.33 36.65 34.13 0 0 18.18'/></g></g></svg>";
+
+                newDiv.appendChild(svgIcon);
+
+                const parishSpan = document.createElement('span');
+                parishSpan.textContent = SITES_TO_FETCH_SLIDER.find(site => event.source === site.domaine)?.paroisse || '';
+
+                imageDiv.appendChild(image);
+                
+                newDiv.appendChild(parishSpan);
+                placeDiv.appendChild(newDiv);
+                imageDiv.appendChild(placeDiv);
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'post-content event-content';
 
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'post-title';
@@ -278,19 +354,32 @@ async function loadAllEvents() {
 
                 const dateDiv = document.createElement('div');
                 dateDiv.className = 'date';
-                dateDiv.innerHTML = `<span>${event.date}</span>`;
-
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'time';
-                timeDiv.innerHTML = `<span>${event.time}</span>`;
+                if (event.isDatePeriod) {
+                    dateDiv.classList.add('date-period');
+                }
+                dateDiv.innerHTML = `<i class="icon far fa-calendar"></i><span>${event.date}</span>`;
 
                 infoDiv.appendChild(dateDiv);
-                if (event.time) {
+                if (event.time && !event.isDatePeriod) {
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = 'time';
+                    timeDiv.innerHTML = `<i class="icon fal fa-clock"></i><span>${event.time}</span>`;
                     infoDiv.appendChild(timeDiv);
                 }
 
-                node.appendChild(titleDiv);
-                node.appendChild(infoDiv);
+                contentDiv.appendChild(titleDiv);
+                contentDiv.appendChild(infoDiv);
+                
+                if (event.text) {
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'post-text';
+                    textDiv.textContent = event.text;
+                    contentDiv.appendChild(textDiv);
+                }
+
+                node.appendChild(imageDiv);
+                node.appendChild(contentDiv);
+
                 postListDiv.appendChild(node);
             });
         } else {
