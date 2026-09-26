@@ -78,6 +78,17 @@ class EventsCache {
             console.error('Erreur lors de l\'écriture du cache des événements:', error);
         }
     }
+
+    static update(events) {
+        try {
+            const raw = localStorage.getItem(EVENTS_CACHE_KEY);
+            let cache = raw ? JSON.parse(raw) : { fetchedAt: Date.now(), events: [] };
+            cache.events = events;
+            localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(cache));
+        } catch (error) {
+            console.error('Erreur lors de la mise à jour du cache des événements:', error);
+        }
+    }
 }
 
 // ===================================================================
@@ -168,27 +179,39 @@ class EventFetcherSlider {
         eventNodes.forEach(node => {
             try {
                 const url = node.getAttribute('href');
+                const imageUrl = node.querySelector('.post-image > img')?.src?.trim() || '';
                 const title = node.querySelector('.post-title')?.textContent?.trim() || 'Titre non disponible';
-
+                const text = node.querySelector('.post-text')?.textContent?.trim() || '';
                 const dateElement = node.querySelector(
                     'a.post-item > div.post-content.event-content > div.event-informations > div.date > span'
                 );
                 const date = dateElement?.textContent?.trim() || '';
-
+                const isDatePeriod = node.querySelector(
+                    'a.post-item > div.post-content.event-content > div.event-informations > div.date-period'
+                ) !== null;
                 const timeElement = node.querySelector(
                     'a.post-item > div.post-content.event-content > div.event-informations > div.time > span'
                 );
-                const time = timeElement?.textContent?.trim() || '';
-
+                let time = '';
+                if (isDatePeriod) {
+                    const timeMatch = date.match(/(\d{1,2}h\d{2})/);
+                    time = timeMatch ? timeMatch[1] : '';
+                } else {
+                    time = timeElement?.textContent?.trim() || '';    
+                }
+                const place = node.querySelector('.event-informations_place > span')?.textContent?.trim() || '';
                 if (date) {
                     events.push({
                         url,
+                        imageUrl,
                         title,
+                        text,
                         date,
                         time,
-                        datetime: this.parseDateTime(date, time),
-                        source: domaine,
-                        category: 'consistoire'
+                        isDatePeriod,
+                        place,
+                        datetime: this.parseDateTime(date, time, isDatePeriod),
+                        source: domaine
                     });
                 }
             } catch (error) {
@@ -199,9 +222,15 @@ class EventFetcherSlider {
         return events;
     }
 
-    parseDateTime(dateStr, timeStr) {
+    parseDateTime(dateStr, timeStr, isDatePeriod) {
         try {
-            const [day, month, year] = dateStr.split('/').map(num => parseInt(num));
+            if (isDatePeriod) {
+                dateMatch = dateStr.match(/Du (\d{2}\/\d{2}\/\d{4})/);
+            } else {
+                dateMatch = ['',dateStr];
+            }
+            
+            const [day, month, year] = dateMatch[1].split('/').map(num => parseInt(num));
 
             const timeMatch = timeStr.match(/(\d{1,2})h(\d{2})/);
             if (!timeMatch) {
@@ -225,13 +254,15 @@ class EventFetcherSlider {
 
         if (cachedEvents) {
             console.log(`Cache des événements utilisé (${cachedEvents.length} événements).`);
-            this.allEvents = cachedEvents;
-            return this.allEvents;
         }
 
         const promises = [];
 
         for (const { domaine, chemin, categorie } of domaineCategorieList) {
+            if (cachedEvents && domaine !== window.location.hostname) {
+                continue;
+            }
+
             console.log(`Récupération des événements de ${domaine} pour la catégorie ${categorie}...`);
 
             promises.push(
@@ -254,9 +285,18 @@ class EventFetcherSlider {
                 this.allEvents.push(...eventArray);
             }
 
+            // Fusion des éléments du cache sauf éléments de {domaine: window.location.hostname}
+            if (cachedEvents) {
+                this.allEvents.push(...cachedEvents.filter(event => event.domaine !== window.location.hostname));
+            }
+
             this.allEvents.sort((a, b) => a.datetime - b.datetime);
 
-            EventsCache.set(this.allEvents);
+            if (cachedEvents) {
+                EventsCache.update(this.allEvents);
+            } else {
+                EventsCache.set(this.allEvents);
+            }
 
             console.log(`Total: ${this.allEvents.length} événements récupérés et mis en cache`);
             return this.allEvents;
@@ -327,28 +367,16 @@ async function loadAllEvents() {
                 node.href = event.url;
                 node.className = 'slider-item_link slider-item';
 
-                const titleDiv = document.createElement('div');
-                titleDiv.className = 'slider-title';
-                titleDiv.textContent = event.title;
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'slider-image';
 
-                const infoDiv = document.createElement('div');
-                infoDiv.className = 'event-informations';
-
-                const dateDiv = document.createElement('div');
-                dateDiv.className = 'date';
-                dateDiv.innerHTML = `<span>${event.date}</span>`;
-
-                const timeDiv = document.createElement('div');
-                timeDiv.className = 'time';
-                timeDiv.innerHTML = `<span>${event.time}</span>`;
-
-                infoDiv.appendChild(dateDiv);
-                if (event.time) {
-                    infoDiv.appendChild(timeDiv);
-                }
+                const image = document.createElement('img');
+                image.src = event.imageUrl;
+                image.alt = event.title;
 
                 const placeDiv = document.createElement('div');
                 placeDiv.className = 'event-informations_place';
+                placeDiv.innerHTML = `<i class="icon far fa-map-marker-alt"></i><span>${event.place}</span>`
 
                 const newDiv = document.createElement('div');
                 newDiv.style.width = '100%';
@@ -365,15 +393,51 @@ async function loadAllEvents() {
                 newDiv.appendChild(svgIcon);
 
                 const parishSpan = document.createElement('span');
-                parishSpan.textContent =
-                    SITES_TO_FETCH_SLIDER.find(site => event.source === site.domaine)?.paroisse || '';
+                parishSpan.textContent = SITES_TO_FETCH_SLIDER.find(site => event.source === site.domaine)?.paroisse || '';
 
+                imageDiv.appendChild(image);
+                
                 newDiv.appendChild(parishSpan);
                 placeDiv.appendChild(newDiv);
-                infoDiv.appendChild(placeDiv);
+                imageDiv.appendChild(placeDiv);
 
-                node.appendChild(titleDiv);
-                node.appendChild(infoDiv);
+                const contentDiv = document.createElement('div');
+                titleDiv.className = 'slider-content';
+                
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'slider-title';
+                titleDiv.textContent = event.title;
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'event-informations';
+
+                const dateDiv = document.createElement('div');
+                dateDiv.className = 'date';
+                if (event.isDatePeriod) {
+                    dateDiv.classList.add('date-period');
+                }
+                dateDiv.innerHTML = `<i class="icon far fa-calendar"></i><span>${event.date}</span>`;
+
+                infoDiv.appendChild(dateDiv);
+                if (event.time && !event.isDatePeriod) {
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = 'time';
+                    timeDiv.innerHTML = `<i class="icon fal fa-clock"></i><span>${event.time}</span>`;
+                    infoDiv.appendChild(timeDiv);
+                }
+
+                contentDiv.appendChild(titleDiv);
+                contentDiv.appendChild(infoDiv);
+                
+                if (event.text) {
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'slider-text';
+                    textDiv.textContent = event.text;
+                    contentDiv.appendChild(textDiv);
+                }
+
+                node.appendChild(imageDiv);
+                node.appendChild(contentDiv);
 
                 sliderListDiv.appendChild(node);
             });
