@@ -20,7 +20,7 @@ const TOUS_LES_EVENEMENTS = 'Tous les événements du consistoire';
 const EVENTS_IN_SLIDER = 9;
 
 // Nombre de jours dans le futur pour chercher les événements
-const MAX_DAYS_SLIDER = 90;
+const MAX_DAYS = 90;
 
 // Clé du localStorage partagé avec events-consistoire-liste.js
 const EVENTS_CACHE_KEY = 'epudf_consistoire_rp_sud_ouest_events';
@@ -29,13 +29,13 @@ const EVENTS_CACHE_KEY = 'epudf_consistoire_rp_sud_ouest_events';
 const EVENTS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
 // Sites et catégories d'événements à récupérer
-const SITES_TO_FETCH_SLIDER = [
+const SITES_TO_FETCH = [
     { domaine: 'chartres-beauce-et-perche.epudf.org', chemin: '/evenements', categorie: 'consistoire', paroisse: 'Chartres, Beauce et Perche' },
     { domaine: 'jvvc.epudf.org', chemin: '/evenements', categorie: 'consistoire', paroisse: 'Jouy-en-Josas, Vélizy, Viroflay, Chaville' },
     { domaine: 'saintcloud-lacellesaintcloud.epudf.org', chemin: '/evenements', categorie: 'consistoire', paroisse: 'Saint-Cloud et La Celle-Saint-Cloud' },
     { domaine: 'meudon-sevres-ville-d-avray.epudf.org', chemin: '/evenements', categorie: 'consistoire', paroisse: 'Meudon, Sèvres, Ville-d\'Avray' },
     { domaine: 'sqy.epudf.org', chemin: '/evenements-agenda-calendrier', categorie: 'consistoire', paroisse: 'Saint-Quentin-en-Yvelines' },
-    { domaine: 'rambouillet.epudf.org', chemin: '/evenements', categorie: 'consistoire', paroisse: 'Rambouillet' },
+    { domaine: 'rambouillet.epudf.org', chemin: '/vie-paroissiale/evenements', categorie: 'consistoire', paroisse: 'Rambouillet' },
     { domaine: 'versailles.epudf.org', chemin: '/evenements', categorie: 'consistoire', paroisse: 'Versailles' }
 ];
 
@@ -116,7 +116,7 @@ class EventFetcherSlider {
             const events = [];
 
             const endDate = new Date(currentDate);
-            endDate.setDate(endDate.getDate() + MAX_DAYS_SLIDER);
+            endDate.setDate(endDate.getDate() + MAX_DAYS);
 
             const dateFrom = currentDate.toISOString().slice(0, 10);
             const dateTo = endDate.toISOString().slice(0, 10);
@@ -224,13 +224,14 @@ class EventFetcherSlider {
 
     parseDateTime(dateStr, timeStr, isDatePeriod) {
         try {
+            let dateMatch;
             if (isDatePeriod) {
                 dateMatch = dateStr.match(/Du (\d{2}\/\d{2}\/\d{4})/);
             } else {
                 dateMatch = ['',dateStr];
             }
             
-            const [day, month, year] = dateMatch[1].split('/').map(num => parseInt(num));
+            const [day, month, year] = dateMatch[1]?.split('/').map(num => parseInt(num)) || [null, null, null];
 
             const timeMatch = timeStr.match(/(\d{1,2})h(\d{2})/);
             if (!timeMatch) {
@@ -319,7 +320,7 @@ async function loadAllEvents() {
     const fetcherSlider = new EventFetcherSlider();
 
     try {
-        const events = await fetcherSlider.fetchEventsFromMultipleSites(SITES_TO_FETCH_SLIDER);
+        const events = await fetcherSlider.fetchEventsFromMultipleSites(SITES_TO_FETCH);
 
         const eventsSliderTmp = document.querySelector('.events-slider-tmp');
         const blockTextWysiwyg = eventsSliderTmp?.closest('.block_text-wysiwyg');
@@ -393,7 +394,7 @@ async function loadAllEvents() {
                 newDiv.appendChild(svgIcon);
 
                 const parishSpan = document.createElement('span');
-                parishSpan.textContent = SITES_TO_FETCH_SLIDER.find(site => event.source === site.domaine)?.paroisse || '';
+                parishSpan.textContent = SITES_TO_FETCH.find(site => event.source === site.domaine)?.paroisse || '';
 
                 imageDiv.appendChild(image);
                 
@@ -402,7 +403,7 @@ async function loadAllEvents() {
                 imageDiv.appendChild(placeDiv);
 
                 const contentDiv = document.createElement('div');
-                titleDiv.className = 'slider-content';
+                contentDiv.className = 'slider-content';
                 
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'slider-title';
